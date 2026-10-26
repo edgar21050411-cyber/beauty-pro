@@ -10,152 +10,150 @@ jobs:
           flutter-version: '3.22.0'
       - run: flutter create . --platforms=android --project-name beauty_pro --overwrite
       - run: |
+          python3 <<'PY'
+          from PIL import Image, ImageDraw, ImageFont
+          import os
+          # Crear icono 1024x1024 con degradado rosa
+          img = Image.new('RGB', (1024, 1024), '#FFD6DE')
+          draw = ImageDraw.Draw(img)
+          for y in range(1024):
+              r = int(255 - (y/1024)*20)
+              g = int(214 - (y/1024)*30)
+              b = int(222 - (y/1024)*10)
+              draw.line([(0,y),(1024,y)], fill=(r,g,b))
+          # Letra B dorada
+          try:
+              font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", 600)
+          except:
+              font = ImageFont.load_default()
+          draw.text((300, 180), "B", fill="#C8A97A", font=font)
+          img.save("icon.png")
+          # Crear carpetas mipmap y copiar icono en todas las densidades
+          for d in ["mipmap-hdpi","mipmap-mdpi","mipmap-xhdpi","mipmap-xxhdpi","mipmap-xxxhdpi"]:
+              path = f"android/app/src/main/res/{d}"
+              os.makedirs(path, exist_ok=True)
+              sizes = {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}
+              im = img.resize((sizes[d], sizes[d]), Image.LANCZOS)
+              im.save(f"{path}/launcher_icon.png")
+              im.save(f"{path}/ic_launcher.png")
+          print("Icono creado")
+          PY
+      - run: |
           cat > pubspec.yaml <<'EOF'
           name: beauty_pro
-          description: Beauty Pro ULTRA
+          description: Beauty Pro V6 FINAL
           publish_to: none
-          version: 3.0.0+1
+          version: 6.0.0+1
           environment:
             sdk: ">=3.0.0 <4.0.0"
           dependencies:
             flutter:
               sdk: flutter
             http: ^1.1.0
-            image_picker: ^1.0.7
+            gal: ^2.3.1
+            share_plus: ^7.2.1
+            path_provider: ^2.1.2
           flutter:
             uses-material-design: true
           EOF
       - run: |
+          cat > android/app/src/main/AndroidManifest.xml <<'MAN'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+              <application android:label="Beauty Pro" android:name="${applicationName}" android:icon="@mipmap/launcher_icon">
+                  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
+                      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
+                      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+                  </activity>
+                  <meta-data android:name="flutterEmbedding" android:value="2"/>
+              </application>
+          </manifest>
+          MAN
+      - run: |
           cat > lib/main.dart <<'DART'
-          import 'dart:typed_data';
+          import 'dart:typed_data'; import 'dart:io';
           import 'package:flutter/material.dart';
           import 'package:http/http.dart' as http;
-
+          import 'package:gal/gal.dart'; import 'package:share_plus/share_plus.dart'; import 'package:path_provider/path_provider.dart';
           void main()=>runApp(const App());
-          class App extends StatelessWidget{const App({super.key}); @override Widget build(BuildContext c)=>MaterialApp(debugShowCheckedModeBanner:false, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor:const Color(0xFF080808)), home: const Home());}
+          class App extends StatelessWidget{const App({super.key}); @override Widget build(BuildContext c)=>MaterialApp(debugShowCheckedModeBanner:false, theme: ThemeData(scaffoldBackgroundColor: const Color(0xFFFFF6F8), useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF8FAB))), home: const Home());}
           List<Uint8List> hist=[];
           Future<Uint8List?> gen(String p) async {
-            try{
-              final u=Uri.parse('https://image.pollinations.ai/prompt/${Uri.encodeComponent(p)}?width=768&height=1152&nologo=true&model=flux&enhance=true');
-              final r=await http.get(u).timeout(const Duration(seconds:50));
-              if(r.statusCode==200){ hist.insert(0, r.bodyBytes); return r.bodyBytes; }
-            }catch(_){}
+            final cut = p.length>150?p.substring(0,150):p;
+            final url=Uri.parse('https://image.pollinations.ai/prompt/${Uri.encodeComponent(cut)}?width=768&height=1024&nologo=true&model=flux');
+            try{ final r=await http.get(url).timeout(const Duration(seconds:70)); if(r.statusCode==200 && r.bodyBytes.length>5000){ hist.insert(0,r.bodyBytes); return r.bodyBytes; } }catch(_){}
             return null;
           }
-          class Home extends StatefulWidget{const Home({super.key}); @override State<Home> createState()=>_HomeS();}
-          class _HomeS extends State<Home>{
-            int idx=0;
-            final pages=[const BodyUltra(), const ClothesUltra(), const FaceUltra(), const TattooTab(), const BgUltra(), const GalTab()];
-            @override Widget build(BuildContext c)=>Scaffold(
-              body: pages[idx],
-              bottomNavigationBar: BottomNavigationBar(currentIndex: idx, onTap: (i)=>setState(()=>idx=i), type: BottomNavigationBarType.fixed, backgroundColor: Colors.black, selectedItemColor: Colors.pinkAccent, unselectedItemColor: Colors.white30, selectedFontSize:10, unselectedFontSize:9, items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.accessibility_new), label:'CUERPO'),
-                BottomNavigationBarItem(icon: Icon(Icons.checkroom), label:'ROPA'),
-                BottomNavigationBarItem(icon: Icon(Icons.face), label:'FACE'),
-                BottomNavigationBarItem(icon: Icon(Icons.brush), label:'TATTOO'),
-                BottomNavigationBarItem(icon: Icon(Icons.wallpaper), label:'FONDO'),
-                BottomNavigationBarItem(icon: Icon(Icons.photo_library), label:'GALERIA'),
-              ]),
-            );
+          class Home extends StatefulWidget{const Home({super.key}); @override State<Home> createState()=>_H();}
+          class _H extends State<Home>{
+            int i=0; final tabs=[const BodyT(), const ClothesT(), const FaceT(), const TattooT(), const BgT(), const GalT()];
+            @override Widget build(BuildContext c)=>Scaffold(body: tabs[i], bottomNavigationBar: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(22)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12)]), child: ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(22)), child: BottomNavigationBar(currentIndex: i, onTap:(x)=>setState(()=>i=x), type: BottomNavigationBarType.fixed, backgroundColor: Colors.white, selectedItemColor: const Color(0xFFFF5A8A), unselectedItemColor: const Color(0xFFD1BFC5), items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.favorite_border), label:'Cuerpo'),
+              BottomNavigationBarItem(icon: Icon(Icons.checkroom_outlined), label:'Ropa'),
+              BottomNavigationBarItem(icon: Icon(Icons.face_outlined), label:'Rostro'),
+              BottomNavigationBarItem(icon: Icon(Icons.brush_outlined), label:'Tattoo'),
+              BottomNavigationBarItem(icon: Icon(Icons.wallpaper_outlined), label:'Fondo'),
+              BottomNavigationBarItem(icon: Icon(Icons.photo_library_outlined), label:'Galeria'),
+            ]))));
           }
-          Widget sl(String t,double v, Function(double) on)=>Column(crossAxisAlignment: CrossAxisAlignment.start, children:[Text('$t ${v.toStringAsFixed(1)}', style: const TextStyle(fontSize:12)), Slider(value:v, min:-5, max:5, divisions:20, activeColor: Colors.pinkAccent, onChanged:on)]);
+          Widget card(Widget ch)=>Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: const Color(0xFFFF8FAB).withOpacity(0.07), blurRadius: 12)]), child: ch);
+          Widget sl(String t,double v,Function(double) f)=>Column(crossAxisAlignment: CrossAxisAlignment.start, children:[Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text(t, style: const TextStyle(fontSize:13, fontWeight: FontWeight.w500, color: Color(0xFF6B4A55))), Text(v.toStringAsFixed(1), style: const TextStyle(color: Color(0xFFFF5A8A)))]), Slider(value:v, min:-5, max:5, activeColor: const Color(0xFFFF8FAB), inactiveColor: const Color(0xFFFFE4EA), onChanged:f)]);
+          Widget btn(String t,bool l,VoidCallback fn)=>Container(width: double.infinity, height:54, decoration: BoxDecoration(borderRadius: BorderRadius.circular(27), gradient: const LinearGradient(colors:[Color(0xFFFF8FAB), Color(0xFFFF5A8A)])), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27))), onPressed: l?null:fn, child: l?const SizedBox(width:20,height:20,child:CircularProgressIndicator(color:Colors.white,strokeWidth:2)):Text(t, style: const TextStyle(color:Colors.white, fontWeight: FontWeight.w700))));
+          Widget resBox(Uint8List b, BuildContext ctx)=>Column(children:[const SizedBox(height:14), ClipRRect(borderRadius: BorderRadius.circular(22), child: Image.memory(b)), const SizedBox(height:10), Row(children:[Expanded(child: OutlinedButton.icon(style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22))), onPressed: () async { await Gal.putImageBytes(b); if(ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Guardado ✨'))); }, icon: const Icon(Icons.download), label: const Text('Guardar'))), const SizedBox(width:10), Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5A8A), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22))), onPressed: () async { final d=await getTemporaryDirectory(); final f=File('${d.path}/beauty.jpg'); await f.writeAsBytes(b); await Share.shareXFiles([XFile(f.path)]); }, icon: const Icon(Icons.share, color:Colors.white), label: const Text('Compartir', style:TextStyle(color:Colors.white))))])]);
 
-          // BODY ULTRA 10 SLIDERS
-          class BodyUltra extends StatefulWidget{const BodyUltra({super.key}); @override State<BodyUltra> createState()=>_BU();}
-          class _BU extends State<BodyUltra>{
-            Uint8List? res; bool l=false;
-            double b=0,w=0,h=0,bt=0,th=0,be=0,he=0,mu=0,ab=0,ar=0;
-            String preset='sexy curvy hourglass bombshell';
-            final ctrl=TextEditingController();
-            @override Widget build(BuildContext c)=>Scaffold(appBar: AppBar(title: const Text('CUERPO ULTRA 10D'), backgroundColor: Colors.pinkAccent), body: ListView(padding: const EdgeInsets.all(12), children:[
-              const Text('PRESET CUERPO:', style: TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold)),
-              Wrap(spacing:5, children:['curvy hourglass','skinny anorexic model','bimbo doll huge bust','fit athletic abs','voluptuous thick','petite tiny','muscle amazon','barbie doll'].map((s)=>ChoiceChip(label: Text(s, style: const TextStyle(fontSize:10)), selected: preset==s, onSelected:(_)=>setState(()=>preset=s))).toList()),
-              sl('Busto', b, (v)=>setState(()=>b=v)),
-              sl('Cintura avispa', w, (v)=>setState(()=>w=v)),
-              sl('Cadera ancha', h, (v)=>setState(()=>h=v)),
-              sl('Gluteo grande', bt, (v)=>setState(()=>bt=v)),
-              sl('Muslos delgados/gruesos', th, (v)=>setState(()=>th=v)),
-              sl('Vientre plano', be, (v)=>setState(()=>be=v)),
-              sl('Altura piernas largas', he, (v)=>setState(()=>he=v)),
-              sl('Musculo', mu, (v)=>setState(()=>mu=v)),
-              sl('Abs six pack', ab, (v)=>setState(()=>ab=v)),
-              sl('Brazos delgados', ar, (v)=>setState(()=>ar=v)),
-              TextField(controller: ctrl, decoration: InputDecoration(hintText: 'Extra: ej: huge fake boobs, tiny waist', filled:true, fillColor: Colors.white10, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-              const SizedBox(height:8),
-              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, padding: const EdgeInsets.all(16)), onPressed: l?null:() async {setState(()=>l=true); final p='full body $preset woman, bust $b, waist $w, hips $h, big butt $bt, thighs $th, flat belly $be, long legs $he, muscle $mu, abs $ab, arms $ar, ${ctrl.text}, keep face identity, ultra sexy photorealistic 8k'; final r=await gen(p); setState(()=>{res=r, l=false});}, child: Text(l?'ESCULPIENDO...':'GENERAR CUERPO ULTRA')),
-              if(res!=null) Image.memory(res!),
+          class BodyT extends StatefulWidget{const BodyT({super.key}); @override State<BodyT> createState()=>_BT();}
+          class _BT extends State<BodyT>{ Uint8List? r; bool l=false; double b=0,w=0,h=0,bt=0; String p='curvy hourglass';
+            @override Widget build(BuildContext c)=>Scaffold(backgroundColor: const Color(0xFFFFF6F8), appBar: AppBar(backgroundColor: const Color(0xFFFFF6F8), elevation:0, title: const Text('Beauty Pro', style:TextStyle(color:Color(0xFF4A2C35), fontWeight:FontWeight.w800)), centerTitle:true), body: ListView(padding: const EdgeInsets.all(16), children:[
+              card(Column(crossAxisAlignment: CrossAxisAlignment.start, children:[const Text('Estilo', style:TextStyle(fontWeight:FontWeight.w600)), const SizedBox(height:8), Wrap(spacing:6, children:['curvy hourglass','barbie doll','fit athletic','soft natural'].map((s)=>ChoiceChip(label: Text(s, style:const TextStyle(fontSize:11)), selected: p==s, selectedColor: const Color(0xFFFFE4EA), onSelected:(_)=>setState(()=>p=s))).toList())])),
+              const SizedBox(height:12),
+              card(Column(children:[sl('Busto', b, (v)=>setState(()=>b=v)), sl('Cintura', w, (v)=>setState(()=>w=v)), sl('Cadera', h, (v)=>setState(()=>h=v)), sl('Glúteo', bt, (v)=>setState(()=>bt=v))])),
+              const SizedBox(height:18),
+              btn(l?'Creando... 20s':'Crear Cuerpo ✨', l, () async { setState(()=>l=true); final out=await gen('beautiful woman full body $p bust $b waist $w hips $h butt $bt fashion model soft light'); setState(()=>{r=out, l=false}); }),
+              if(r!=null) resBox(r!, c),
             ]));
           }
-
-          // ROPA ULTRA
-          class ClothesUltra extends StatefulWidget{const ClothesUltra({super.key}); @override State<ClothesUltra> createState()=>_CU();}
-          class _CU extends State<ClothesUltra>{
-            Uint8List? res; bool l=false; final ctrl=TextEditingController(text:'tiny red lace lingerie see through');
-            String fab='lace';
-            @override Widget build(BuildContext c)=>Scaffold(appBar: AppBar(title: const Text('ROPA + TELA PRO'), backgroundColor: Colors.pinkAccent), body: ListView(padding: const EdgeInsets.all(12), children:[
-              TextField(controller: ctrl, maxLines:2, decoration: InputDecoration(hintText: 'Describe TODO lo que quieres vestir', filled:true, fillColor: Colors.white10, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
-              const SizedBox(height:6),
-              const Text('TELA:', style: TextStyle(color: Colors.pinkAccent)),
-              Wrap(spacing:5, children:['lace','leather','silk','latex','cotton','denim','see through','fishnet'].map((s)=>ChoiceChip(label: Text(s), selected: fab==s, onSelected:(_)=>setState(()=>fab=s))).toList()),
-              Wrap(spacing:5, children:['micro bikini','lingerie','evening dress','gym','jeans thong','schoolgirl','nurse','maid','bikini'].map((s)=>ActionChip(label: Text(s, style: const TextStyle(fontSize:11)), onPressed:()=>setState(()=>ctrl.text+=' $s'))).toList()),
-              const SizedBox(height:8),
-              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, padding: const EdgeInsets.all(16)), onPressed: l?null:() async {setState(()=>l=true); final r=await gen('woman wearing ${ctrl.text}, fabric $fab, sexy tight, keep identity, full body 8k photorealistic'); setState(()=>{res=r, l=false});}, child: Text(l?'VISTIENDO...':'PROBAR ROPA ULTRA')),
-              if(res!=null) Image.memory(res!),
+          class ClothesT extends StatefulWidget{const ClothesT({super.key}); @override State<ClothesT> createState()=>_CT();}
+          class _CT extends State<ClothesT>{ Uint8List? r; bool l=false; final ctrl=TextEditingController(text:'pink silk dress');
+            @override Widget build(BuildContext c)=>Scaffold(backgroundColor: const Color(0xFFFFF6F8), appBar: AppBar(backgroundColor: const Color(0xFFFFF6F8), elevation:0, title: const Text('Ropa IA', style:TextStyle(color:Color(0xFF4A2C35), fontWeight:FontWeight.w700)), centerTitle:true), body: ListView(padding: const EdgeInsets.all(16), children:[
+              card(TextField(controller: ctrl, decoration: InputDecoration(filled:true, fillColor: const Color(0xFFFFF6F8), hintText: 'Ej: red lingerie, evening dress', border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide:BorderSide.none)))),
+              const SizedBox(height:18),
+              btn(l?'Vistiendo...':'Probar Ropa 💖', l, () async { setState(()=>l=true); final out=await gen('woman wearing ${ctrl.text} full body photorealistic soft'); setState(()=>{r=out, l=false}); }),
+              if(r!=null) resBox(r!, c),
             ]));
           }
-
-          // FACE ULTRA
-          class FaceUltra extends StatefulWidget{const FaceUltra({super.key}); @override State<FaceUltra> createState()=>_FU();}
-          class _FU extends State<FaceUltra>{
-            Uint8List? res; bool l=false;
-            double lips=2, nose=-2, jaw=1, eyes=1, smile=2, teeth=2, blush=1;
-            String style='barbie doll makeup glam';
-            @override Widget build(BuildContext c)=>Scaffold(appBar: AppBar(title: const Text('FACE LAB ULTRA'), backgroundColor: Colors.pinkAccent), body: ListView(padding: const EdgeInsets.all(12), children:[
-              Wrap(spacing:5, children:['barbie doll','instagram baddie','onlyfans hot','latina spicy','korean ulzzang','natural'].map((s)=>ChoiceChip(label: Text(s), selected: style==s, onSelected:(_)=>setState(()=>style=s))).toList()),
-              sl('Labios gigantes', lips, (v)=>setState(()=>lips=v)),
-              sl('Nariz ultra fina', nose, (v)=>setState(()=>nose=v)),
-              sl('Mandibula marcada', jaw, (v)=>setState(()=>jaw=v)),
-              sl('Ojos grandes', eyes, (v)=>setState(()=>eyes=v)),
-              sl('Sonrisa amplia', smile, (v)=>setState(()=>smile=v)),
-              sl('Dientes blancos perfectos', teeth, (v)=>setState(()=>teeth=v)),
-              sl('Rubor rosado', blush, (v)=>setState(()=>blush=v)),
-              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, padding: const EdgeInsets.all(16)), onPressed: l?null:() async {setState(()=>l=true); final r=await gen('close up portrait $style, thick lips $lips, slim nose $nose, sharp jaw $jaw, big eyes $eyes, big smile $smile, white teeth $teeth, pink blush $blush, flawless skin, keep identity, 8k'); setState(()=>{res=r, l=false});}, child: Text(l?'OPERANDO...':'FACE ULTRA')),
-              if(res!=null) Image.memory(res!),
+          class FaceT extends StatefulWidget{const FaceT({super.key}); @override State<FaceT> createState()=>_FT();}
+          class _FT extends State<FaceT>{ Uint8List? r; bool l=false; double lips=1.5, nose=-1;
+            @override Widget build(BuildContext c)=>Scaffold(backgroundColor: const Color(0xFFFFF6F8), appBar: AppBar(backgroundColor: const Color(0xFFFFF6F8), elevation:0, title: const Text('Rostro', style:TextStyle(color:Color(0xFF4A2C35), fontWeight:FontWeight.w700)), centerTitle:true), body: ListView(padding: const EdgeInsets.all(16), children:[
+              card(Column(children:[sl('Labios', lips, (v)=>setState(()=>lips=v)), sl('Nariz fina', nose, (v)=>setState(()=>nose=v))])),
+              const SizedBox(height:18),
+              btn(l?'Perfeccionando...':'Crear Rostro', l, () async { setState(()=>l=true); final out=await gen('close up portrait glam makeup thick lips $lips slim nose $nose flawless skin'); setState(()=>{r=out, l=false}); }),
+              if(r!=null) resBox(r!, c),
             ]));
           }
-
-          // TATTOO TAB NUEVO
-          class TattooTab extends StatefulWidget{const TattooTab({super.key}); @override State<TattooTab> createState()=>_TT();}
-          class _TT extends State<TattooTab>{
-            Uint8List? res; bool l=false; String place='on neck'; final ctrl=TextEditingController(text:'small heart with wings');
-            @override Widget build(BuildContext c)=>Scaffold(appBar: AppBar(title: const Text('TATTOO IA MAPA'), backgroundColor: Colors.pinkAccent), body: ListView(padding: const EdgeInsets.all(12), children:[
-              const Text('LUGAR DEL CUERPO:'),
-              Wrap(spacing:5, children:['on neck','on chest between boobs','on arm','on thigh','on belly','on lower back','on butt','on hand'].map((s)=>ChoiceChip(label: Text(s), selected: place==s, onSelected:(_)=>setState(()=>place=s))).toList()),
-              const SizedBox(height:8),
-              TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Que tatuaje? ej: dragon, roses, name', filled:true, fillColor: Colors.white10, border: OutlineInputBorder())),
-              const SizedBox(height:8),
-              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, padding: const EdgeInsets.all(16)), onPressed: l?null:() async {setState(()=>l=true); final r=await gen('sexy woman $place tattoo of ${ctrl.text}, photorealistic detailed tattoo, keep identity, 8k'); setState(()=>{res=r, l=false});}, child: Text(l?'TATUANDO...':'GENERAR TATTOO')),
-              if(res!=null) Image.memory(res!),
+          class TattooT extends StatefulWidget{const TattooT({super.key}); @override State<TattooT> createState()=>_TT();}
+          class _TT extends State<TattooT>{ Uint8List? r; bool l=false; final ctrl=TextEditingController(text:'tiny heart');
+            @override Widget build(BuildContext c)=>Scaffold(backgroundColor: const Color(0xFFFFF6F8), appBar: AppBar(backgroundColor: const Color(0xFFFFF6F8), elevation:0, title: const Text('Tattoo', style:TextStyle(color:Color(0xFF4A2C35), fontWeight:FontWeight.w700)), centerTitle:true), body: ListView(padding: const EdgeInsets.all(16), children:[
+              card(TextField(controller: ctrl, decoration: InputDecoration(filled:true, fillColor: const Color(0xFFFFF6F8), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide:BorderSide.none), hintText: 'Que tatuaje?'))),
+              const SizedBox(height:18),
+              btn(l?'Tatuando...':'Generar Tattoo', l, () async { setState(()=>l=true); final out=await gen('woman with delicate tattoo of ${ctrl.text} photorealistic'); setState(()=>{r=out, l=false}); }),
+              if(r!=null) resBox(r!, c),
             ]));
           }
-
-          // BG
-          class BgUltra extends StatefulWidget{const BgUltra({super.key}); @override State<BgUltra> createState()=>_BGU();}
-          class _BGU extends State<BgUltra>{
-            Uint8List? res; bool l=false; final ctrl=TextEditingController(text:'luxury penthouse night city view');
-            @override Widget build(BuildContext c)=>Scaffold(appBar: AppBar(title: const Text('FONDO ULTRA'), backgroundColor: Colors.pinkAccent), body: ListView(padding: const EdgeInsets.all(12), children:[
-              TextField(controller: ctrl, decoration: const InputDecoration(filled:true, fillColor: Colors.white10, border: OutlineInputBorder())),
-              Wrap(spacing:5, children:['onlyfans bedroom','beach sunset','hotel luxury','car lambo','pool','neon city'].map((s)=>ActionChip(label: Text(s), onPressed:()=>setState(()=>ctrl.text=s))).toList()),
-              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent), onPressed: l?null:() async {setState(()=>l=true); final r=await gen('person in ${ctrl.text} background, sexy photoshoot, keep identity'); setState(()=>{res=r, l=false});}, child: Text(l?'...':'CAMBIAR FONDO ULTRA')),
-              if(res!=null) Image.memory(res!),
+          class BgT extends StatefulWidget{const BgT({super.key}); @override State<BgT> createState()=>_BgT();}
+          class _BgT extends State<BgT>{ Uint8List? r; bool l=false; final ctrl=TextEditingController(text:'luxury beach sunset');
+            @override Widget build(BuildContext c)=>Scaffold(backgroundColor: const Color(0xFFFFF6F8), appBar: AppBar(backgroundColor: const Color(0xFFFFF6F8), elevation:0, title: const Text('Fondos', style:TextStyle(color:Color(0xFF4A2C35), fontWeight:FontWeight.w700)), centerTitle:true), body: ListView(padding: const EdgeInsets.all(16), children:[
+              card(TextField(controller: ctrl, decoration: InputDecoration(filled:true, fillColor: const Color(0xFFFFF6F8), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide:BorderSide.none)))),
+              const SizedBox(height:18),
+              btn(l?'Cambiando...':'Cambiar Fondo', l, () async { setState(()=>l=true); final out=await gen('woman in ${ctrl.text} background aesthetic'); setState(()=>{r=out, l=false}); }),
+              if(r!=null) resBox(r!, c),
             ]));
           }
-
-          class GalTab extends StatelessWidget{const GalTab({super.key}); @override Widget build(BuildContext c)=>Scaffold(appBar: AppBar(title: Text('GALERIA ${hist.length}'), backgroundColor: Colors.pinkAccent), body: hist.isEmpty? const Center(child: Text('Nada aun')) : GridView.builder(padding: const EdgeInsets.all(6), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2, crossAxisSpacing:6, mainAxisSpacing:6), itemCount: hist.length, itemBuilder: (_,i)=>ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(hist[i], fit: BoxFit.cover))));}
+          class GalT extends StatelessWidget{const GalT({super.key}); @override Widget build(BuildContext c)=>Scaffold(backgroundColor: const Color(0xFFFFF6F8), appBar: AppBar(backgroundColor: const Color(0xFFFFF6F8), elevation:0, title: Text('Galeria ${hist.length}', style: const TextStyle(color:Color(0xFF4A2C35), fontWeight:FontWeight.w700)), centerTitle:true), body: hist.isEmpty? const Center(child: Text('Aun no has creado nada 💕')) : GridView.builder(padding: const EdgeInsets.all(12), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2, crossAxisSpacing:10, mainAxisSpacing:10), itemCount: hist.length, itemBuilder: (_,i)=>ClipRRect(borderRadius: BorderRadius.circular(18), child: Image.memory(hist[i], fit: BoxFit.cover))));}
           DART
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
-          name: Beauty-Pro-ULTRA-V3
+          name: Beauty-Pro-V6-FINAL-LOGO
           path: build/app/outputs/flutter-apk/app-release.apk
